@@ -1,0 +1,43 @@
+{
+  "name": "talent-intelligence-platform",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "seed": "tsx scripts/seed.ts",
+    "test:scoring": "tsx scripts/test-scoring.ts",
+    "test:authz": "tsx scripts/test-authz.ts",
+    "test:pdf": "tsx --conditions=react-server scripts/test-pdf.ts",
+    "test:ai": "tsx --conditions=react-server scripts/test-ai.ts",
+    "test": "npm run test:scoring && npm run test:authz && npm run test:pdf && npm run test:ai",
+    "test:http": "bash scripts/test-http.sh"
+  },
+  "dependencies": {
+    "@supabase/ssr": "0.12.4",
+    "@supabase/supabase-js": "2.112.2",
+    "groq-sdk": "1.5.0",
+    "next": "15.5.23",
+    "pdf-parse": "2.4.5",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "recharts": "3.10.1",
+    "server-only": "0.0.1",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "26.2.0",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.4",
+    "autoprefixer": "10.5.4",
+    "eslint": "9.39.5",
+    "eslint-config-next": "16.3.0",
+    "postcss": "8.5.26",
+    "tailwindcss": "3.4.19",
+    "tsx": "4.23.11",
+    "typescript": "6.0.3"
+  }
+}

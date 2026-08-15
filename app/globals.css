@@ -1,0 +1,99 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --rail-yes: #15803D;
+    --rail-partial: #B45309;
+    --rail-no: #9F1239;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'tnum';
+  }
+
+  body {
+    @apply bg-wash text-ink antialiased;
+    font-synthesis-weight: none;
+  }
+
+  /* Numbers that must be comparable down a column are always tabular. */
+  .tnum { font-variant-numeric: tabular-nums; }
+
+  ::selection { background: #CFE2E9; color: #07242E; }
+
+  :focus-visible {
+    outline: 2px solid #0F3D4C;
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  /* Eyebrow labels encode section type, in the utility face. */
+  .eyebrow {
+    @apply font-mono text-micro uppercase tracking-[0.14em] text-ink-faint;
+  }
+
+  .panel {
+    @apply bg-paper border border-rule rounded-sharp;
+  }
+
+  .panel-pad { @apply p-5 sm:p-6; }
+
+  /* The signature element: a requirement row whose left rail carries the
+     evidence state, so a recruiter can scan the rail alone. */
+  .ledger-row {
+    @apply relative grid gap-3 border-b border-rule py-3 pl-4 last:border-b-0;
+    grid-template-columns: 1fr auto;
+  }
+  .ledger-row::before {
+    content: '';
+    @apply absolute left-0 top-3 bottom-3 w-[3px] rounded-full;
+    background: var(--rail-color, #DCE1E7);
+  }
+  .rail-demonstrated { --rail-color: var(--rail-yes); }
+  .rail-insufficient { --rail-color: var(--rail-partial); }
+  .rail-not_demonstrated { --rail-color: var(--rail-no); }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-sharp border px-4 py-2
+           text-sm font-medium transition-colors disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .btn-primary {
+    @apply btn bg-petrol-700 border-petrol-700 text-white hover:bg-petrol-900 hover:border-petrol-900;
+  }
+  .btn-secondary {
+    @apply btn bg-paper border-rule text-ink hover:bg-wash;
+  }
+  .btn-ghost {
+    @apply btn border-transparent bg-transparent text-ink-soft hover:bg-wash;
+  }
+
+  .field {
+    @apply w-full rounded-sharp border border-rule bg-paper px-3 py-2 text-sm text-ink
+           placeholder:text-ink-faint focus:border-petrol-500 focus:outline-none
+           focus:ring-1 focus:ring-petrol-500;
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-sharp border border-rule bg-wash
+           px-2 py-0.5 font-mono text-micro uppercase tracking-wider text-ink-muted;
+  }
+
+  .th {
+    @apply px-4 py-2.5 text-left font-mono text-micro uppercase tracking-[0.12em]
+           text-ink-faint border-b border-rule;
+  }
+  .td { @apply px-4 py-3 text-sm border-b border-rule align-top; }
+}
