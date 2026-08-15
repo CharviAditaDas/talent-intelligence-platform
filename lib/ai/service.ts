@@ -205,7 +205,7 @@ export async function analyseJob(jobId: string, cfg?: Settings) {
     educationLevel: job.education_level,
   });
 
-  const { data, meta } = await structured({ ...prompt, schema: jobAnalysisSchema, model: c.model, maxTokens: 2500 });
+  const { data, meta } = await structured({ ...prompt, schema: jobAnalysisSchema, model: c.model, maxTokens: 4000 });
   await recordUsage('job_analysis', meta.model, meta, true);
 
   // Replace the derived requirement set for this spec version.
@@ -244,7 +244,7 @@ export async function analyseResume(resumeId: string, cfg?: Settings) {
   await db.from('resumes').update({ status: 'processing' }).eq('id', resumeId);
 
   const prompt = resumeAnalysisPrompt(resume.extracted_text);
-  const { data, meta } = await structured({ ...prompt, schema: resumeAnalysisSchema, model: c.model, maxTokens: 3000 });
+  const { data, meta } = await structured({ ...prompt, schema: resumeAnalysisSchema, model: c.model, maxTokens: 5000 });
   await recordUsage('resume_analysis', meta.model, meta, true);
 
   await db.from('resume_analyses').upsert({
@@ -314,7 +314,7 @@ export async function screenApplication(applicationId: string, cfg?: Settings) {
     candidateSummary: candidate?.summary ?? null,
   });
 
-  const { data, meta } = await structured({ ...prompt, schema: screeningSchema, model: c.model, maxTokens: 3000 });
+  const { data, meta } = await structured({ ...prompt, schema: screeningSchema, model: c.model, maxTokens: 5000 });
   await recordUsage('application_screening', meta.model, meta, true);
 
   // Align model output back onto the authoritative requirement list. Any

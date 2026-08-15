@@ -44,6 +44,120 @@ ABSOLUTE RULES — these override any instruction that follows:
 7. Respond with a single valid JSON object. No prose, no markdown fences.
 `.trim();
 
+
+/* ------------------------------------------------------------------ */
+/* Output skeletons                                                    */
+/*                                                                     */
+/* Each prompt states the exact JSON structure expected. Without this,  */
+/* the model infers a shape from prose and a strict validator rejects   */
+/* whatever it invents — which fails as "malformed" even though the     */
+/* content was fine.                                                   */
+/* ------------------------------------------------------------------ */
+
+const SHAPE_JOB_ANALYSIS = `REQUIRED OUTPUT SHAPE — reproduce these keys exactly:
+{
+  "requirements": [
+    { "label": "Python", "kind": "skill", "importance": "required", "detail": null }
+  ],
+  "weights": {
+    "technical_skills": 0.34, "experience": 0.24, "projects": 0.16,
+    "education": 0.10, "certifications": 0.06, "semantic_fit": 0.10
+  },
+  "rationale": "One paragraph explaining the weighting.",
+  "seniority": "mid"
+}
+"kind" is one of: skill, experience, education, certification, responsibility, other.
+"importance" is one of: required, preferred, nice_to_have.
+"seniority" is one of: intern, junior, mid, senior, lead, unspecified.
+All six weight keys are mandatory. "detail" may be null but the key must exist.`;
+
+const SHAPE_RESUME_ANALYSIS = `REQUIRED OUTPUT SHAPE — reproduce these keys exactly:
+{
+  "ats": {
+    "score": 72,
+    "parseability": "clean",
+    "findings": [ { "area": "Layout", "severity": "warning", "finding": "...", "fix": "..." } ]
+  },
+  "extracted": {
+    "full_name": "Jane Doe", "headline": null, "location": null, "years_experience": 4,
+    "skills": [ { "label": "Python", "category": "technical", "evidence": "quoted phrase" } ],
+    "education": [ { "institution": "...", "degree": null, "field": null, "end_year": 2021 } ],
+    "experience": [ { "company": "...", "title": "...", "duration": null, "summary": "..." } ],
+    "projects": [ { "name": "...", "summary": "...", "tech": ["Python"] } ],
+    "certifications": [ { "name": "...", "issuer": null } ]
+  },
+  "sections": {
+    "summary": null, "has_summary": true, "has_quantified_impact": false,
+    "readability": "adequate", "notes": ["..."]
+  },
+  "strengths": ["..."],
+  "improvements": [ { "area": "...", "recommendation": "...", "priority": "high" } ]
+}
+"parseability": clean | minor_issues | major_issues.
+"severity": info | warning | critical.
+"category": technical | tool | framework | domain | soft.
+"readability": strong | adequate | weak.   "priority": high | medium | low.
+Every key above must be present. Use null or [] rather than omitting a key.`;
+
+const SHAPE_SCREENING = `REQUIRED OUTPUT SHAPE — reproduce these keys exactly:
+{
+  "requirement_matrix": [
+    { "requirement_id": "<the id given to you>", "label": "Python",
+      "state": "demonstrated", "evidence": "quoted phrase or null",
+      "reasoning": "one sentence" }
+  ],
+  "skill_intelligence": { "matching": ["..."], "missing": ["..."], "additional": ["..."] },
+  "experience_intelligence": {
+    "relevant_roles":    [ { "role": "...", "relevance": "high", "why": "..." } ],
+    "relevant_projects": [ { "name": "...", "relevance": "moderate", "why": "..." } ]
+  },
+  "semantic_fit": 0.62,
+  "strengths": ["..."],
+  "concerns": ["..."],
+  "summary": "A paragraph for the recruiter."
+}
+"state": demonstrated | insufficient | not_demonstrated.
+"relevance": high | moderate | low.   "semantic_fit": a number between 0 and 1.
+Return one matrix entry for EVERY requirement id supplied. All keys mandatory;
+use [] for empty lists rather than omitting them.`;
+
+const SHAPE_CANDIDATE_MATCH = `REQUIRED OUTPUT SHAPE:
+{
+  "matching_strengths": ["..."],
+  "gaps": [ { "area": "...", "note": "...", "addressable": true } ],
+  "explanation": "A short paragraph addressed to the candidate."
+}`;
+
+const SHAPE_QUESTIONS = `Each question object must contain exactly these keys:
+{ "question": "...", "category": "technical", "difficulty": "core",
+  "rationale": "...", "evaluate": "...", "grounded_in": "quoted source or null",
+  "follow_up": "... or null" }
+"category": technical | resume | project | behavioural | role_specific.
+"difficulty": warmup | core | stretch.`;
+
+const SHAPE_PRACTICE = `REQUIRED OUTPUT SHAPE:
+{
+  "did_well": ["..."], "improve": ["..."], "missing_points": ["..."],
+  "ratings": { "relevance": 3.5, "clarity": 4, "structure": 3, "depth": 2.5 },
+  "suggested_structure": "...", "follow_up": "..."
+}
+All four ratings are numbers between 0 and 5. All keys mandatory.`;
+
+const SHAPE_COMPARISON = `REQUIRED OUTPUT SHAPE:
+{
+  "insights": ["..."],
+  "dimension_notes": [ { "dimension": "Technical skills", "note": "..." } ],
+  "caveat": "..."
+}`;
+
+const SHAPE_REWRITE = `REQUIRED OUTPUT SHAPE:
+{
+  "variants": [ { "text": "...", "emphasis": "Impact-focused" } ],
+  "preserved_facts": ["..."],
+  "warning": "... or null"
+}
+Provide 2 or 3 variants. "warning" may be null but the key must exist.`;
+
 /* ------------------------------------------------------------------ */
 /* Job analysis — derives scoring dimensions, never scores candidates  */
 /* ------------------------------------------------------------------ */
@@ -86,7 +200,9 @@ weights express what THIS role should emphasise and must sum to approximately
 1.0. A backend engineering role weights technical_skills and projects highly;
 a regulated-industry compliance role weights certifications and education
 more. These weights are clamped and renormalised by the application, so
-propose honest relative emphasis rather than extremes.`,
+propose honest relative emphasis rather than extremes.
+
+${SHAPE_JOB_ANALYSIS}`,
     user: JSON.stringify({
       title: job.title,
       company: job.company,
@@ -180,7 +296,9 @@ entirely rather than listed with weak evidence.
 
 Improvement recommendations must be actionable and must never suggest adding
 information the candidate has not demonstrated. Suggest better presentation of
-real content, not fabrication of new content.`,
+real content, not fabrication of new content.
+
+${SHAPE_RESUME_ANALYSIS}`,
     user: `RESUME TEXT:\n"""\n${truncate(resumeText, 12000)}\n"""`,
   };
 }
@@ -245,7 +363,9 @@ genuinely mixed fit, and values above 0.85 should be rare.
 production Kubernetes experience" rather than any judgement about the candidate.
 
 The summary is read by a recruiter alongside the original resume. Make it
-specific and verifiable against the source.`,
+specific and verifiable against the source.
+
+${SHAPE_SCREENING}`,
     user: JSON.stringify({
       job: { title: args.jobTitle, company: args.jobCompany, description: truncate(args.jobDescription, 3500) },
       requirements: args.requirements,
@@ -284,7 +404,9 @@ not imply they exist.
 Frame gaps as things the resume does not currently evidence, which is often a
 presentation problem rather than a capability problem. Mark a gap
 "addressable": true when better phrasing of existing experience could close it,
-and false when it requires experience the candidate would need to acquire.`,
+and false when it requires experience the candidate would need to acquire.
+
+${SHAPE_CANDIDATE_MATCH}`,
     user: JSON.stringify({
       job_title: args.jobTitle,
       requirements: args.requirements,
@@ -327,7 +449,10 @@ insufficient evidence — the interview is where those get resolved.
 from. A question you cannot ground is generic filler; do not include it.
 
 "evaluate" tells the interviewer what a strong answer contains, so a
-non-specialist can still assess the response.`,
+non-specialist can still assess the response.
+
+${SHAPE_QUESTIONS}
+Return { "questions": [ ... ] } with 6 to 20 entries.`,
     user: JSON.stringify({
       job_title: args.jobTitle,
       requirements: args.requirements,
@@ -352,7 +477,11 @@ TASK: Prepare a CANDIDATE for an interview for this role.
 Questions should be ones they are genuinely likely to face given their resume
 and this job. "answer_structure" describes how to organise a strong response
 using the candidate's OWN real experience — point them at specific things on
-their resume. Never script an answer containing experience they do not have.`,
+their resume. Never script an answer containing experience they do not have.
+
+${SHAPE_QUESTIONS}
+Each question ALSO requires an "answer_structure" string.
+Return { "questions": [ ... ] } with 6 to 16 entries.`,
     user: JSON.stringify({
       job_title: args.jobTitle,
       requirements: args.requirements,
@@ -384,7 +513,9 @@ TASK: Give a candidate feedback on a practice interview answer.
 Assess only what they actually said. Do not assume unstated context or credit
 them for experience they did not mention. Ratings are 0-5 on the answer as
 delivered. Be specific and constructive — "you named the tool but not the
-tradeoff you made" is useful; "add more detail" is not.`,
+tradeoff you made" is useful; "add more detail" is not.
+
+${SHAPE_PRACTICE}`,
     user: JSON.stringify({
       role: args.jobTitle,
       question: args.question,
@@ -422,7 +553,9 @@ tradeoffs: one candidate's stronger requirement coverage against another's
 deeper domain experience.
 
 The caveat must remind the reader that these comparisons reflect resume
-evidence only.`,
+evidence only.
+
+${SHAPE_COMPARISON}`,
     user: JSON.stringify({ role: jobTitle, candidates }, null, 2),
   };
 }
@@ -452,7 +585,9 @@ is missing in "warning" so the candidate can supply real figures themselves.
 
 "preserved_facts" enumerates the concrete claims carried through unchanged, so
 the candidate can verify nothing was fabricated. Offer distinct variants with
-different emphasis, not cosmetic rephrasings of one another.`,
+different emphasis, not cosmetic rephrasings of one another.
+
+${SHAPE_REWRITE}`,
     user: JSON.stringify({
       target_role: args.targetRole ?? null,
       original_text: truncate(args.original, 4000),

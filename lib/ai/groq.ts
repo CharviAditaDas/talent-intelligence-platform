@@ -122,20 +122,24 @@ export async function structured<T>(opts: {
       const validated = opts.schema.safeParse(parsed.value);
       if (validated.success) return { data: validated.data, meta };
       lastMalformed = validated.error.issues
-        .slice(0, 6)
-        .map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`)
-        .join('; ');
+        .slice(0, 20)
+        .map((i) => `  - ${i.path.join('.') || '(root)'}: ${i.message}`)
+        .join('\n');
     } else {
       lastMalformed = 'Response was not valid JSON.';
     }
 
     // One corrective round trip, then give up and let the queue decide.
-    messages.push({ role: 'assistant', content: raw.slice(0, 2000) });
+    messages.push({ role: 'assistant', content: raw.slice(0, 1500) });
     messages.push({
       role: 'user',
       content:
-        `That response did not satisfy the required schema (${lastMalformed}). ` +
-        `Reply again with a single valid JSON object only. No prose, no markdown fences.`,
+        `That response did not match the required structure.\n\n` +
+        `Problems found:\n${lastMalformed}\n\n` +
+        `Re-read the REQUIRED OUTPUT SHAPE in the system message and reply with a ` +
+        `single JSON object matching it exactly. Include every key shown, even when ` +
+        `a value is null or an empty list. Do not rename, nest, or omit keys. ` +
+        `No prose, no markdown fences.`,
     });
   }
 
