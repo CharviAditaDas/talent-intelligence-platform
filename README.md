@@ -1,6 +1,6 @@
 # AI Resume Screening & Talent Intelligence Platform
 
-**Live demo → https://YOUR-URL.vercel.app**
+**Live demo → https://talent-intelligence-platform-six.vercel.app**
 
 An evidence-first recruitment platform. Every claim it makes about a candidate
 is traceable to the line of the resume it came from.
