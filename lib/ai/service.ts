@@ -82,7 +82,7 @@ export async function enqueue(kind: Kind, refId: string, payload: Record<string,
  * Returns a summary rather than throwing, so one poisoned job cannot stall
  * the queue.
  */
-export async function drainQueue(limit = 5) {
+export async function drainQueue(limit = 1, spacingMs = 0) {
   const db = createAdminClient();
   const cfg = await settings();
   if (!cfg.enabled) return { processed: 0, skipped: 'ai_disabled' as const };
@@ -108,7 +108,12 @@ export async function drainQueue(limit = 5) {
   if (!due || due.length === 0) return { processed: 0 };
 
   let processed = 0;
+  let first = true;
   for (const job of due) {
+    // Space requests apart. On a token-per-minute ceiling, back-to-back calls
+    // are what trigger a 429, not the total volume.
+    if (!first && spacingMs > 0) await new Promise((r) => setTimeout(r, spacingMs));
+    first = false;
     // Optimistic claim: only one worker can move a row out of queued.
     const { data: claimed } = await db
       .from('ai_jobs')
@@ -140,7 +145,12 @@ async function handleFailure(job: { id: string; kind: string; ref_id: string; at
 
   if (canRetry) {
     // Exponential backoff, honouring Retry-After when Groq supplies one.
-    const backoff = aiErr.retryAfterMs ?? cfg.backoff_ms * 2 ** (attempts - 1);
+    // Groq's Retry-After is authoritative when present. Otherwise back off
+    // exponentially with a floor of 30s for rate limits — a 2s retry against a
+    // per-minute ceiling just burns an attempt for nothing.
+    const exponential = cfg.backoff_ms * 2 ** (attempts - 1);
+    const backoff = aiErr.retryAfterMs
+      ?? (aiErr.kind === 'rate_limit' ? Math.max(30_000, exponential) : exponential);
     await db.from('ai_jobs').update({
       status: aiErr.kind === 'rate_limit' ? 'rate_limited' : 'queued',
       scheduled_for: new Date(Date.now() + backoff).toISOString(),
@@ -195,7 +205,7 @@ export async function analyseJob(jobId: string, cfg?: Settings) {
     educationLevel: job.education_level,
   });
 
-  const { data, meta } = await structured({ ...prompt, schema: jobAnalysisSchema, model: c.model });
+  const { data, meta } = await structured({ ...prompt, schema: jobAnalysisSchema, model: c.model, maxTokens: 2500 });
   await recordUsage('job_analysis', meta.model, meta, true);
 
   // Replace the derived requirement set for this spec version.
@@ -234,7 +244,7 @@ export async function analyseResume(resumeId: string, cfg?: Settings) {
   await db.from('resumes').update({ status: 'processing' }).eq('id', resumeId);
 
   const prompt = resumeAnalysisPrompt(resume.extracted_text);
-  const { data, meta } = await structured({ ...prompt, schema: resumeAnalysisSchema, model: c.model, maxTokens: 6000 });
+  const { data, meta } = await structured({ ...prompt, schema: resumeAnalysisSchema, model: c.model, maxTokens: 3000 });
   await recordUsage('resume_analysis', meta.model, meta, true);
 
   await db.from('resume_analyses').upsert({
@@ -304,7 +314,7 @@ export async function screenApplication(applicationId: string, cfg?: Settings) {
     candidateSummary: candidate?.summary ?? null,
   });
 
-  const { data, meta } = await structured({ ...prompt, schema: screeningSchema, model: c.model, maxTokens: 6000 });
+  const { data, meta } = await structured({ ...prompt, schema: screeningSchema, model: c.model, maxTokens: 3000 });
   await recordUsage('application_screening', meta.model, meta, true);
 
   // Align model output back onto the authoritative requirement list. Any
@@ -408,7 +418,7 @@ export async function buildInterviewKit(applicationId: string, cfg?: Settings) {
     concerns: analyses?.concerns ?? [],
   });
 
-  const { data, meta } = await structured({ ...prompt, schema: interviewKitSchema, model: c.model, maxTokens: 6000 });
+  const { data, meta } = await structured({ ...prompt, schema: interviewKitSchema, model: c.model, maxTokens: 3000 });
   await recordUsage('interview_kit', meta.model, meta, true);
 
   await db.from('interview_kits').upsert({
@@ -432,7 +442,7 @@ export async function buildInterviewPrep(candidateId: string, jobId: string, cfg
     requirements: (reqs ?? []).map((r) => r.label),
     resumeText: resume.extracted_text,
   });
-  const { data, meta } = await structured({ ...prompt, schema: interviewPrepSchema, model: c.model, maxTokens: 6000 });
+  const { data, meta } = await structured({ ...prompt, schema: interviewPrepSchema, model: c.model, maxTokens: 3000 });
   await recordUsage('interview_prep', meta.model, meta, true);
 
   await db.from('interview_preps').upsert({

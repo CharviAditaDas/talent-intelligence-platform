@@ -51,7 +51,12 @@ async function handle(request: Request) {
   }
 
   try {
-    const result = await drainQueue(8);
+    // Defaults are sized for a free-tier token-per-minute ceiling. A caller
+    // on a paid plan can raise them: /api/worker/drain?limit=5&spacing=2000
+    const params = new URL(request.url).searchParams;
+    const limit = Math.min(10, Math.max(1, Number(params.get('limit')) || 1));
+    const spacing = Math.min(60_000, Math.max(0, Number(params.get('spacing')) || 0));
+    const result = await drainQueue(limit, spacing);
     return NextResponse.json(result);
   } catch (err) {
     console.error('[worker]', err);

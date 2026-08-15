@@ -181,7 +181,7 @@ entirely rather than listed with weak evidence.
 Improvement recommendations must be actionable and must never suggest adding
 information the candidate has not demonstrated. Suggest better presentation of
 real content, not fabrication of new content.`,
-    user: `RESUME TEXT:\n"""\n${truncate(resumeText, 24000)}\n"""`,
+    user: `RESUME TEXT:\n"""\n${truncate(resumeText, 12000)}\n"""`,
   };
 }
 
@@ -247,7 +247,7 @@ production Kubernetes experience" rather than any judgement about the candidate.
 The summary is read by a recruiter alongside the original resume. Make it
 specific and verifiable against the source.`,
     user: JSON.stringify({
-      job: { title: args.jobTitle, company: args.jobCompany, description: truncate(args.jobDescription, 6000) },
+      job: { title: args.jobTitle, company: args.jobCompany, description: truncate(args.jobDescription, 3500) },
       requirements: args.requirements,
       candidate_profile_summary: args.candidateSummary ?? null,
       resume_text: truncate(args.resumeText, 20000),
@@ -288,7 +288,7 @@ and false when it requires experience the candidate would need to acquire.`,
     user: JSON.stringify({
       job_title: args.jobTitle,
       requirements: args.requirements,
-      resume_text: truncate(args.resumeText, 16000),
+      resume_text: truncate(args.resumeText, 9000),
     }, null, 2),
   };
 }
@@ -332,7 +332,7 @@ non-specialist can still assess the response.`,
       job_title: args.jobTitle,
       requirements: args.requirements,
       open_concerns: args.concerns,
-      resume_text: truncate(args.resumeText, 14000),
+      resume_text: truncate(args.resumeText, 9000),
     }, null, 2),
   };
 }
@@ -356,7 +356,7 @@ their resume. Never script an answer containing experience they do not have.`,
     user: JSON.stringify({
       job_title: args.jobTitle,
       requirements: args.requirements,
-      resume_text: truncate(args.resumeText, 14000),
+      resume_text: truncate(args.resumeText, 9000),
     }, null, 2),
   };
 }
