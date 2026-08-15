@@ -506,13 +506,20 @@ async function main() {
   // --- Queue the real AI pipeline -----------------------------------
   // Specifications are derived first: screening depends on job_requirements
   // existing, so ordering matters here.
-  for (const id of jobIds.values()) {
-    await db.from('ai_jobs').insert({ kind: 'job_analysis', ref_id: id }).select();
+  let queued = 0;
+  for (const [kind, ids] of [
+    ['job_analysis', Array.from(jobIds.values())],
+    ['resume_analysis', Array.from(resumeIds.values())],
+  ] as const) {
+    for (const id of ids) {
+      const { error } = await db.from('ai_jobs').insert({ kind, ref_id: id });
+      if (error && !/duplicate key/i.test(error.message)) {
+        throw new Error(`Could not queue ${kind} for ${id}: ${error.message}`);
+      }
+      queued += 1;
+    }
   }
-  for (const id of resumeIds.values()) {
-    await db.from('ai_jobs').insert({ kind: 'resume_analysis', ref_id: id }).select();
-  }
-  console.log(`\n  queued ${jobIds.size} job analyses and ${resumeIds.size} resume analyses`);
+  console.log(`\n  queued ${queued} analyses`);
 
   // --- Applications --------------------------------------------------
   let appCount = 0;
@@ -552,7 +559,11 @@ async function main() {
       created_at: new Date(Date.now() - daysAgo * 86400000).toISOString(),
     });
 
-    await db.from('ai_jobs').insert({ kind: 'application_screening', ref_id: data.id }).select();
+    const { error: queueError } = await db
+      .from('ai_jobs').insert({ kind: 'application_screening', ref_id: data.id });
+    if (queueError && !/duplicate key/i.test(queueError.message)) {
+      throw new Error(`Could not queue screening for ${data.id}: ${queueError.message}`);
+    }
     appCount += 1;
   }
   console.log(`  ${appCount} applications queued for screening`);
@@ -577,13 +588,16 @@ async function main() {
     context: { jobs: jobIds.size, applications: appCount, candidates: candidateIds.size },
   });
 
+  const { count: pending } = await db
+    .from('ai_jobs').select('id', { count: 'exact', head: true }).eq('status', 'queued');
+
   console.log(`
-Seeding complete.
+Seeding complete. ${pending ?? 0} AI jobs are queued and waiting.
 
 Next: run the worker until the queue drains, so screening produces real
 assessments through the same pipeline a live application uses.
 
-  curl -X POST http://localhost:3000/api/worker/drain \\
+  curl -X POST <your-deployed-url>/api/worker/drain \\
        -H "Authorization: Bearer $AI_WORKER_SECRET"
 
 Repeat until it reports { processed: 0 }. Expect roughly ${jobIds.size + resumeIds.size + appCount}

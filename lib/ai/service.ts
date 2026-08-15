@@ -66,7 +66,14 @@ async function logEvent(level: 'info' | 'warn' | 'error', source: string, messag
 export async function enqueue(kind: Kind, refId: string, payload: Record<string, unknown> = {}) {
   const db = createAdminClient();
   const { error } = await db.from('ai_jobs').insert({ kind, ref_id: refId, payload });
-  if (error && !error.message.includes('duplicate key')) throw error;
+  // A duplicate is the partial unique index doing its job — the work is
+  // already in flight, so this is success, not failure.
+  if (error && !/duplicate key/i.test(error.message)) {
+    await logEvent('error', `ai.enqueue.${kind}`, 'Could not queue AI work.', {
+      ref: refId, message: error.message, code: error.code,
+    }).catch(() => {});
+    throw error;
+  }
   return { queued: true };
 }
 
@@ -80,13 +87,23 @@ export async function drainQueue(limit = 5) {
   const cfg = await settings();
   if (!cfg.enabled) return { processed: 0, skipped: 'ai_disabled' as const };
 
-  const { data: due } = await db
+  const { data: due, error: queueError } = await db
     .from('ai_jobs')
     .select('*')
     .in('status', ['queued', 'rate_limited'])
     .lte('scheduled_for', new Date().toISOString())
     .order('created_at', { ascending: true })
     .limit(limit);
+
+  // An unreadable queue and an empty queue are completely different problems,
+  // and reporting both as { processed: 0 } makes a credential failure look
+  // like normal idle behaviour. Surface the error instead of hiding it.
+  if (queueError) {
+    await logEvent('error', 'ai.queue', 'Could not read the AI job queue.', {
+      message: queueError.message, code: queueError.code,
+    }).catch(() => {});
+    throw new Error(`AI queue unreadable: ${queueError.message}`);
+  }
 
   if (!due || due.length === 0) return { processed: 0 };
 
